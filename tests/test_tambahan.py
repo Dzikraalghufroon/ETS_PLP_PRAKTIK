@@ -102,3 +102,66 @@ def test_regresi_update_subquery_operasi_read():
     usage = analyze_statement(stmt)
     assert usage["pelanggan"] == {"U"}
     assert usage["pesanan"] == {"R"}
+
+# ==============================================================================
+# 2. TEST KASUS TEPI (EDGE CASES)
+# ==============================================================================
+
+def test_kasus_tepi_komentar_blok_tidak_ditutup():
+    """Kasus Tepi 1: Komentar blok yang tidak ditutup harus menghasilkan LexError pada baris dimulainya komentar.
+    Risiko: Tanpa pengecekan ketat, parser bisa terus memindai sampai EOF dan menelan seluruh sisa kode."""
+    with pytest.raises(LexError) as exc_info:
+        tokenize("/* ini komentar yang lupa ditutup\nSELECT * FROM t;")
+    assert "komentar blok tidak ditutup" in str(exc_info.value)
+    assert exc_info.value.line == 1
+
+
+def test_kasus_tepi_subquery_from_tanpa_alias_warning():
+    """Kasus Tepi 2: Subquery di klausa FROM tanpa alias harus memunculkan warning diagnostik.
+    Risiko: Subquery turunan tanpa alias tidak dapat dirujuk oleh qualifier kolom mana pun."""
+    sql = "SELECT x FROM (SELECT id FROM users);"
+    script = parse_sql(sql)
+    diags = Resolver().resolve_script(script)
+    assert any(d.level == "warning" and "tanpa alias" in d.message for d in diags)
+
+
+def test_kasus_tepi_kolom_tanpa_qualifier_ambigu_dua_tabel():
+    """Kasus Tepi 3: Kolom tanpa qualifier jika ada lebih dari 1 tabel di scope harus warning dan resolved = None.
+    Risiko: Jika parser/resolver salah memilih tabel secara asal, CRUD matrix dan analisis kolom akan salah."""
+    sql = "SELECT nama FROM pelanggan p, pengguna u;"
+    script = parse_sql(sql)
+    diags = Resolver().resolve_script(script)
+    assert any(d.level == "warning" and "ambigu" in d.message for d in diags)
+    col = script.statements[0].columns[0].expr
+    assert col.resolved is None
+
+
+def test_kasus_tepi_titik_koma_berulang_dan_kosong():
+    """Kasus Tepi 4: Skrip dengan titik koma berturut-turut atau di awal/akhir file.
+    Risiko: Parser rekursif dapat mengalami crash atau mendeteksi error tak terduga pada empty statement."""
+    sql = ";; SELECT 1 FROM t;; ;"
+    script = parse_sql(sql)
+    assert script.errors == []
+    assert len(script.statements) == 1
+    assert script.statements[0].sources[0].name == "t"
+
+
+def test_kasus_tepi_insert_select_kompleks_dengan_join_dan_where():
+    """Kasus Tepi 5: INSERT INTO ... SELECT yang menggabungkan JOIN dan subquery di WHERE.
+    Risiko: Analisis tabel bisa tertukar antara tabel target C dan tabel-tabel sumber R dalam query berlapis."""
+    sql = """
+    INSERT INTO arsip (id, total)
+    SELECT p.id, p.total
+    FROM pesanan p
+    JOIN pelanggan c ON c.id = p.pelanggan_id
+    WHERE p.total > (SELECT AVG(nominal) FROM batas);
+    """
+    res = analyze_source(sql)
+    assert res.parse_errors == []
+    matrix = res.matrix()
+    assert matrix == {
+        "arsip": "C",
+        "batas": "R",
+        "pelanggan": "R",
+        "pesanan": "R",
+    }
