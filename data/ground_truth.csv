@@ -1,0 +1,11 @@
+file,baris,tabel,operasi
+campuran_error.sql,2,pelanggan,R
+campuran_error.sql,6,produk,U
+campuran_error.sql,8,keranjang,D
+laporan_penjualan.sql,3,pelanggan,R
+laporan_penjualan.sql,3,pesanan,R
+laporan_penjualan.sql,9,arsip_pesanan,C
+laporan_penjualan.sql,9,pesanan,R
+laporan_penjualan.sql,12,pelanggan,U
+laporan_penjualan.sql,12,pesanan,R
+laporan_penjualan.sql,15,pesanan,D
