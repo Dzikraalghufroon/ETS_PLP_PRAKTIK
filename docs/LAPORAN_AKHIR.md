@@ -112,7 +112,7 @@ Meskipun seluruh bug implementasi telah diperbaiki dan mencapai akurasi 100% pad
 
 ## 4. Pembagian kerja
 
-Pengerjaan tugas diselesaikan secara kolaboratif melalui metode *pair programming* dan pembagian tanggung jawab teknis berbasis fitur/komponen spesifik (mengingat sebagian besar berkas inti dikembangkan bersama oleh kedua anggota):
+Pengerjaan tugas diselesaikan secara kolaboratif melalui pembagian tanggung jawab teknis berbasis komponen spesifik (mengingat sebagian besar berkas inti dikembangkan bersama oleh kedua anggota dan mencegah terjadinya konflik):
 
 1. **Nadhief Musyaffa:**
    - **Lexer (`crud/lexer.py`):**
