@@ -47,6 +47,7 @@ class Resolver:
         return self.diagnostics
 
     def resolve_statement(self, stmt) -> None:
+        self.scope = None
         if isinstance(stmt, ast.Select):
             self._select(stmt)
         elif isinstance(stmt, ast.Insert):
@@ -55,6 +56,7 @@ class Resolver:
             self._update(stmt)
         elif isinstance(stmt, ast.Delete):
             self._delete(stmt)
+        self.scope = None
 
     # ---- scope ----------------------------------------------------------
     def _push(self) -> None:
