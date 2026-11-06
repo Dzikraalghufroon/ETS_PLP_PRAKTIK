@@ -34,15 +34,24 @@ def main(argv=None) -> int:
     ap.add_argument("--ast", action="store_true", help="cetak AST (setelah resolusi), lalu keluar")
     args = ap.parse_args(argv)
 
+    files = []
+    for p in args.files:
+        s = str(p)
+        if "*" in s or "?" in s:
+            import glob
+            files.extend(Path(f) for f in sorted(glob.glob(s)))
+        else:
+            files.append(p)
+
     if args.ast:
-        for path in args.files:
+        for path in files:
             print(f"===== {path} =====")
             _print_ast(path)
         return 0
 
     had_error = False
     results = {}
-    for path in args.files:
+    for path in files:
         res = analyze_source(path.read_text(encoding="utf-8"))
         results[path.name] = res
         if res.lex_error:
