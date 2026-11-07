@@ -1,19 +1,11 @@
 # Kartu Desain
 
-Tuliskan lima keputusan desain penting dalam pekerjaan kalian. Untuk tiap keputusan, sebutkan
-alternatif yang ditolak dan alasannya. Contoh topik (boleh memilih yang lain):
-
-- bagaimana parser membedakan `*` sebagai "semua kolom" dan sebagai perkalian;
-- di mana dan bagaimana presedensi `AND`/`OR` dinyatakan;
-- mengapa error recovery berhenti di `;`, bukan di keyword `SELECT` berikutnya;
-- urutan pencarian scope dan akibatnya pada shadowing serta correlated subquery;
-- mengapa kolom tanpa qualifier hanya dilihat di scope terdalam, dan apa kelemahannya;
-- bagaimana implementasi `INSERT ... SELECT` atau komentar blok kalian.
+Dokumen ini mendokumentasikan lima keputusan desain arsitektural penting yang diambil dalam penyelesaian ekstraktor CRUD matrix, beserta alternatif yang dipertimbangkan dan alasan pemilihannya.
 
 | No | Keputusan | Alternatif yang ditolak | Alasan |
 | --- | --- | --- | --- |
-| 1 | | | |
-| 2 | | | |
-| 3 | | | |
-| 4 | | | |
-| 5 | | | |
+| 1 | **Pemisahan Presedensi `AND` dan `OR` ke Metode Grammar Terpisah (`_or` dan `_and`)** | Menggabungkan penanganan `AND` dan `OR` dalam satu perulangan dengan tabel prioritas (Pratt Parsing atau Shunting-yard algorithm). | Mempertahankan arsitektur *recursive descent* murni sesuai Crafting Interpreters Bab 6. Memisahkan metode membuat hierarki fungsi berpadanan 1:1 dengan aturan EBNF pada SPESIFIKASI.md (`or_expr` dan `and_expr`), sehingga pohon AST mengikat `AND` lebih kuat secara deterministik tanpa menambah kompleksitas state parser. |
+| 2 | **Sinkronisasi Panic Mode Berhenti pada Token Delimiter Titik Koma (`;`)** | Berhenti pada deteksi kata kunci awal statement berikutnya (`SELECT`, `INSERT`, `UPDATE`, `DELETE`). | Dalam SQL, kata kunci seperti `SELECT` sangat sering muncul di tengah-tengah statement sebagai subquery skalar atau subquery `IN`/`EXISTS`. Jika sinkronisasi berhenti di kata kunci statement, pecahan statement yang rusak bisa keliru didiagnosis sebagai statement baru. Titik koma (`;`) merupakan terminator statement yang tegas dan terdefinisi di grammar level skrip (Bab 6). |
+| 3 | **Pencarian Scope Lexical Melalui Pointer Rantai dari Scope Terdalam ke Induk (*Innermost to Outermost*)** | Menggunakan kamus simbol datar tunggal (*flat symbol table*) dengan penamaan hierarkis terkuantifikasi (misalnya `scope1.scope2.alias`). | Mengikuti pola *Environment Chain* (Crafting Interpreters Bab 11). Menelusuri rantai pointer dari `self.scope` ke `scope.parent` secara otomatis mewujudkan sifat *variable shadowing* (alias lokal ditemukan pertama kali dan menutupi alias luar bernama sama), sekaligus memungkinkan *correlated subquery* merujuk alias induk secara transparan jika tidak terhalang shadowing. |
+| 4 | **Resolusi Kolom Tanpa Qualifier Dibatasi Hanya pada Scope Terdalam (*Single Table Lookup*)** | Menelusuri seluruh rantai scope ke luar (*lexical propagation*) untuk mencari tabel yang mungkin memuat kolom tersebut jika scope lokal ambigu. | Sesuai SPESIFIKASI.md Bagian 4.3 dan 7, ekstraktor bekerja tanpa skema basis data (*schemaless*). Tanpa katalog kolom tabel fisik, membiarkan kolom tanpa qualifier merambat keluar akan memicu resolusi liar (*false positive binding*) pada kueri kompleks. Membatasi resolusi pada scope terdalam hanya bila terdapat tepat satu tabel adalah pendekatan paling aman, sedangkan sisanya ditandai sebagai peringatan ambigu (`Diagnostic warning`). |
+| 5 | **Diferensiasi Token `*` ("Semua Kolom" vs "Perkalian") Ditentukan oleh Parser, Bukan Lexer** | Menjadikan `*` sebagai `TokenType.OP` umum atau membedakannya secara spekulatif di tingkat Lexer berdasarkan whitespace/lookahead. | Mematuhi prinsip pemisahan tanggung jawab (Crafting Interpreters Bab 4 dan 5): Lexer tidak peka konteks (*context-free*). Lexer hanya memancarkan `TokenType.STAR` untuk karakter `*`. Parser yang memahami struktur gramatikal menentukan maknanya: saat berada di posisi awal daftar proyeksi (`_select_list`), ia diparsing sebagai node `ast.Star()`, sedangkan saat berada di dalam ekspresi aritmetika (`_multiplicative`), ia diparsing sebagai operator perkalian biner. |
